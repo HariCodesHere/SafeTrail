@@ -1,127 +1,150 @@
-# SafeRoute Planner 🌐🚨  
-*A smart, AI-powered route planner that prioritizes safety using real-time crime data, user preferences, and machine learning.*  
+# SafeRoute Planner 🌐🛡️  
+**An Agentic AI-Powered Safety Navigation System**  
+*Real-time route protection with automatic risk intervention and emergency protocols*  
 
 ## Tech Stack  
+| Component | Technology |  
+|-----------|------------|  
+| **Frontend** | Next.js 14, React Map GL |  
+| **Backend** | Python FastAPI, Node.js |  
+| **AI Engine** | Google Gemini Pro |  
+| **Real-Time** | WebSockets, Firebase Cloud Messaging |  
+| **Maps** | Google Maps API, Mapbox |  
+| **Database** | Supabase (PostgreSQL) |  
+| **Emergency** | Twilio API, Emergency Services APIs |  
 
-| Category       | Technology |  
-|---------------|------------|  
-| **Frontend**  | Next.js 14 (App Router), TailwindCSS, Shadcn/ui |  
-| **Backend**   | Python (FastAPI), Node.js (Express) |  
-| **Database**  | PostgreSQL (Supabase) |  
-| **Maps**      | Google Maps API (Free Tier) / OpenStreetMap (OSM) |  
-| **AI**        | Google Gemini, OpenAI (Optional) |  
-| **Auth**      | NextAuth.js (OAuth) |  
-| **Package Manager** | pnpm |  
-| **Deployment** | Vercel (Frontend), Render (Backend) |  
+## Agentic Features  
+✅ **Real-Time Journey Monitoring**  
+✅ **Automatic Rerouting on Risk Detection**  
+✅ **Proactive User Check-Ins**  
+✅ **Emergency Contact Escalation**  
+✅ **Crime Prediction AI**  
 
-## Features  
+## Agentic Workflow  
+~~~mermaid
+sequenceDiagram
+    participant User
+    participant Agent
+    participant DataFeeds
+    participant Emergency
 
-✅ **AI-Powered Safety Scoring** – Uses Gemini to analyze crime reports and suggest safer routes  
-✅ **Real-Time Alerts** – Integrates with crowdsourced safety data (e.g., SafetiPin)  
-✅ **Personalized Routing** – Adjusts recommendations based on user profile (gender, time of day)  
-✅ **Multi-Modal Transit** – Supports walking, public transport, and ride-sharing  
-✅ **Dark Mode & Accessibility** – Built with TailwindCSS for responsive design  
+    User->>Agent: Set destination + preferences
+    Agent->>DataFeeds: Subscribe to crime/location
+    loop Every 30 seconds
+        DataFeeds->>Agent: Push live updates
+        alt Risk detected
+            Agent->>Agent: Recalculate route
+            Agent->>User: Send alert + reason
+        end
+        alt User unresponsive/off-route
+            Agent->>User: Check-in request
+            alt No response in 2min
+                Agent->>Emergency: Activate protocol
+            end
+        end
+    end
+~~~
+
+## Implementation  
+
+### 1. Agent Controller (Python)  
+~~~python
+class SafetyAgent:
+    def __init__(self, user_id):
+        self.user = user_id
+        self.thresholds = self.load_preferences()
+        
+    def monitor_journey(self):
+        while journey_active:
+            location = get_live_location(self.user)
+            incidents = fetch_realtime_incidents(location)
+            
+            if self.risk_detected(incidents):
+                new_route = self.recalculate_route()
+                self.notify_user(f"Rerouted! Reason: {incidents[0].type}")
+                
+            if self.check_off_route():
+                if not self.verify_user_response():
+                    self.activate_emergency_protocol()
+~~~
+
+### 2. Risk Detection System  
+~~~python
+def risk_detected(location, user_profile):
+    # Gemini AI safety analysis
+    safety_report = gemini_analyze(location)
+    
+    # Combine with real-time data
+    risk_score = (0.6 * safety_report['risk_score'] +
+                  0.3 * get_crime_density(location) +
+                  0.1 * get_lighting_quality(location))
+    
+    # Apply profile-based thresholds
+    return risk_score > RISK_THRESHOLDS[user_profile]
+~~~
+
+### 3. Emergency Protocol  
+~~~python
+def activate_emergency_protocol(user_id):
+    contacts = db.get_emergency_contacts(user_id)
+    location = get_last_location(user_id)
+    
+    # Stage 1: Notify trusted contacts
+    for contact in contacts:
+        send_alert(contact, f"Safety concern: {user_id} at {location}")
+    
+    # Stage 2: Contact authorities
+    if no_response_after(300):  # 5 minutes
+        call_emergency_services(location)
+        activate_siren_remotely(user_id)
+~~~
 
 ## Setup Guide  
 
-### 1. Clone the Repository  
+### 1. Installation  
 ~~~bash
-git clone https://github.com/yourusername/saferoute-planner.git  
-cd saferoute-planner  
-~~~  
+# Clone repository
+git clone https://github.com/yourusername/saferoute-agentic.git
+cd saferoute-agentic
 
-### 2. Install Dependencies  
-~~~bash
-pnpm install  # Frontend  
-cd backend && pip install -r requirements.txt  # Python Backend  
-~~~  
-
-### 3. Configure Environment Variables  
-Create `.env` files with the following content:  
-
-**Frontend (Next.js)**:  
+# Install dependencies
+pnpm install  # Frontend
+pip install -r requirements.txt  # Python backend
 ~~~
-NEXT_PUBLIC_GMAPS_API_KEY=your_key  
-NEXT_PUBLIC_SUPABASE_URL=your_url  
-NEXT_PUBLIC_SUPABASE_KEY=your_key  
-~~~  
 
-**Backend (Python)**:  
+### 2. Configuration  
+Create `.env` file:  
 ~~~
-GEMINI_API_KEY=your_key  
-DATABASE_URL=postgresql://user:pass@localhost:5432/saferoute  
-~~~  
+GEMINI_API_KEY=your_google_ai_key
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_token
+FIREBASE_KEY=your_firebase_credentials.json
+~~~
 
-### 4. Run the Project  
-**Frontend**:  
-~~~bash
-pnpm dev  
-~~~  
+## Deployment Architecture  
+~~~mermaid
+graph LR
+    A[Web/Mobile Client] --> B[Agentic Controller]
+    B --> C[Live Crime API]
+    B --> D[AI Safety Engine]
+    B --> E[Real-Time Alert System]
+    E --> F[Twilio SMS]
+    E --> G[Firebase Push]
+    E --> H[Emergency Services]
+~~~
 
-**Backend (Python FastAPI)**:  
-~~~bash
-uvicorn main:app --reload  
-~~~  
+## Agentic Decision Matrix  
+| Condition | Action |  
+|-----------|--------|  
+| **Crime reported on route** | Reroute + notify user |  
+| **User deviates from path** | Check-in request |  
+| **No response to check-in** | Alert trusted contacts |  
+| **High-risk location** | Enable live location sharing |  
+| **Emergency button pressed** | Immediate authorities contact |  
 
-## API Integrations  
-
-| Service | Use Case | Free Tier Limit |  
-|---------|----------|----------------|  
-| Google Maps API | Route data, Geocoding | $200/month |  
-| OpenStreetMap (OSM) | Fallback for maps | Free |  
-| Google Gemini | Crime risk prediction | Free (rate-limited) |  
-| SafetiPin | Crowdsourced safety scores | Request API access |  
-
-## AI Implementation  
-
-### 1. Safety Score Prediction (Python)  
-~~~python
-from google.generativeai import GenerativeModel  
-
-def get_safety_score(location: str) -> float:  
-    model = GenerativeModel("gemini-pro")  
-    prompt = f"Rate safety (0-1) of {location} for women at night based on crime data."  
-    response = model.generate_content(prompt)  
-    return float(response.text)  
-~~~  
-
-### 2. Route Optimization Algorithm  
-Uses **weighted cost function** (safety vs. distance):  
-~~~python
-def calculate_optimal_route(start, end, safety_weight=0.7):  
-    routes = get_routes_from_gmaps(start, end)  
-    best_route = min(routes, key=lambda r: (  
-        safety_weight * r.risk + (1 - safety_weight) * r.distance  
-    ))  
-    return best_route  
-~~~  
-
-## Deployment  
-
-1. **Frontend (Vercel)**:  
-~~~bash
-pnpm build
-vercel deploy
-~~~  
-
-2. **Backend (Render)**:  
-- Link GitHub repository  
-- Set environment variables  
-- Specify build command: `pip install -r requirements.txt`  
-- Set start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`  
-
-## Contributing  
-
-1. Fork the repository  
-2. Create feature branch:  
-~~~bash
-git checkout -b feature/new-safety-algorithm
-~~~  
-3. Commit changes and submit PR  
-
-## License  
-MIT © 2024 [Harikrishnan Santhosh & Team]  
-
-## Support  
-For assistance, open an issue on [GitHub](https://github.com/HariCodesHere/SafeTrail/issues)  
+## Roadmap  
+- [ ] Phase 1: Core monitoring (Q1 2024)  
+- [ ] Phase 2: Multi-city crime data (Q2 2024)  
+- [ ] Phase 3: Predictive risk modeling (Q3 2024)  
+- [ ] Phase 4: Crowdsourced threat reporting (Q4 2024)  
 ~~~
