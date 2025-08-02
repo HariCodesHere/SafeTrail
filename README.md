@@ -104,8 +104,8 @@ def activate_emergency_protocol(user_id):
 ### 1. Installation  
 ~~~bash
 # Clone repository
-git clone https://github.com/yourusername/saferoute-agentic.git
-cd saferoute-agentic
+git clone https://github.com/HariCodesHere/SafeTrail.git
+cd SafeTrail
 
 # Install dependencies
 pnpm install  # Frontend
