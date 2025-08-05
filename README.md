@@ -125,10 +125,40 @@ pip install -r requirements.txt  # Python backend
 Create `.env` file:
 
 ```
-GEMINI_API_KEY=your_google_ai_key
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-FIREBASE_KEY=your_firebase_credentials.json
+# Google AI API Key for Gemini Pro
+GEMINI_API_KEY=your_google_ai_key_here
+
+# Twilio Configuration
+TWILIO_ACCOUNT_SID=your_twilio_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_token_here
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
+
+# Firebase Configuration
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_PRIVATE_KEY_ID=your_firebase_private_key_id
+FIREBASE_PRIVATE_KEY="your_firebase_private_key"
+FIREBASE_CLIENT_EMAIL=your_firebase_client_email
+FIREBASE_CLIENT_ID=your_firebase_client_id
+FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
+
+# Supabase Configuration
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Google Maps API
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
+# Mapbox API
+MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
+
+# Application Configuration
+NODE_ENV=development
+NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+
 ```
 
 ## Deployment Architecture
