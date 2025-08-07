@@ -2,11 +2,11 @@ import os
 try:
     from supabase import create_client, Client
     SUPABASE_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     create_client = None
     Client = None
     SUPABASE_AVAILABLE = False
-    print("Warning: Supabase not available. Using mock database.")
+    print(f"Warning: Supabase not available due to import error: {e}. Using mock database.")
 
 from typing import Dict, List, Optional
 import json

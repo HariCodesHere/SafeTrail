@@ -1,18 +1,23 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import asyncio
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 import os
 from dotenv import load_dotenv
 
 from safety_agent import SafetyAgent
+from agentic_ai import AgenticAI
+from conversational_interface import ConversationalInterface
 from models import UserProfile, JourneyRequest, EmergencyAlert
 from database import Database
 from emergency_protocol import EmergencyProtocol
 
-load_dotenv()
+# Load .env file from parent directory
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI(title="SafeTrail API", version="1.0.0")
 
@@ -25,11 +30,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic models for new endpoints
+class ConversationMessage(BaseModel):
+    message: str
+    context: Optional[Dict[str, Any]] = None
+
+class AgenticRequest(BaseModel):
+    user_id: str
+    request: str
+    context: Optional[Dict[str, Any]] = None
+
 # Global state
 active_agents: Dict[str, SafetyAgent] = {}
+agentic_agents: Dict[str, AgenticAI] = {}
 websocket_connections: Dict[str, WebSocket] = {}
 db = Database()
 emergency = EmergencyProtocol()
+conversational_interface = ConversationalInterface(db, emergency)
 
 @app.on_event("startup")
 async def startup_event():
@@ -127,12 +144,104 @@ async def send_websocket_message(user_id: str, message: dict):
         except Exception as e:
             print(f"Failed to send WebSocket message to {user_id}: {e}")
 
+# New Agentic AI Endpoints
+
+@app.post("/api/agentic/chat/{user_id}")
+async def agentic_chat(user_id: str, message: ConversationMessage):
+    """Process conversational input with agentic AI"""
+    try:
+        response = await conversational_interface.process_conversation(
+            user_id, message.message, message.context
+        )
+        return {"status": "success", "response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agentic/start-session/{user_id}")
+async def start_agentic_session(user_id: str, context: Optional[Dict[str, Any]] = None):
+    """Start a new agentic conversation session"""
+    try:
+        response = await conversational_interface.start_conversation_session(user_id, context)
+        return {"status": "session_started", "response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agentic/end-session/{user_id}")
+async def end_agentic_session(user_id: str):
+    """End agentic conversation session"""
+    try:
+        response = await conversational_interface.end_conversation_session(user_id)
+        return {"status": "session_ended", "response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/agentic/stats/{user_id}")
+async def get_agentic_stats(user_id: str):
+    """Get conversation statistics and learning insights"""
+    try:
+        stats = conversational_interface.get_conversation_stats(user_id)
+        return {"status": "success", "stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agentic/autonomous-request")
+async def autonomous_agentic_request(request: AgenticRequest):
+    """Process autonomous agentic AI request with multi-step planning"""
+    try:
+        agent = await conversational_interface.get_or_create_agent(request.user_id)
+        response = await agent.process_natural_language_request(request.request, request.context)
+        return {"status": "success", "response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.websocket("/ws/agentic/{user_id}")
+async def agentic_websocket_endpoint(websocket: WebSocket, user_id: str):
+    """WebSocket connection for agentic AI real-time communication"""
+    await websocket.accept()
+    
+    # Connect to conversational interface
+    await conversational_interface.connect_websocket(user_id, websocket)
+    
+    try:
+        while True:
+            # Listen for messages from client
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            if message_data.get("type") == "chat_message":
+                # Process conversational message
+                response = await conversational_interface.process_conversation(
+                    user_id, 
+                    message_data.get("message", ""),
+                    message_data.get("context", {})
+                )
+                
+                # Send response back
+                await websocket.send_text(json.dumps({
+                    "type": "chat_response",
+                    "data": response
+                }))
+            
+            elif message_data.get("type") == "location_update":
+                # Handle location updates for agentic monitoring
+                if user_id in agentic_agents:
+                    # Update agent with new location context
+                    context = {"current_location": message_data.get("location")}
+                    await agentic_agents[user_id].process_natural_language_request(
+                        "Location updated", context
+                    )
+                    
+    except WebSocketDisconnect:
+        await conversational_interface.disconnect_websocket(user_id)
+        print(f"Agentic WebSocket disconnected for user: {user_id}")
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
         "active_journeys": len(active_agents),
+        "agentic_agents": len(conversational_interface.active_agents),
         "websocket_connections": len(websocket_connections)
     }
 
