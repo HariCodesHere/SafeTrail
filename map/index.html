@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Map &amp; Route Planner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.0.0/dist/geosearch.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        /* This is the key CSS to make the map visible */
+        html, body, #map {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevents scrollbars */
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #333;
+        }
+        
+        /* Your custom styles for the UI elements */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        .header-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            align-items: center;
+        }
+        
+        .header-container .input-group {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .header-container .icon {
+            position: absolute;
+            left: 12px;
+            color: #888;
+        }
+        
+        .header-container input {
+            width: 250px;
+            padding: 10px 10px 10px 40px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        
+        .header-container input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+        }
+        
+        .header-container button {
+            background-color: #007bff;
+            color: white;
+            font-weight: 600;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        
+        .header-container button:hover {
+            background-color: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .header-container button:active {
+            transform: translateY(0);
+        }
+        
+        .header-container button:disabled {
+            background-color: #888;
+            cursor: not-allowed;
+        }
+        
+        .leaflet-control {
+            margin: 15px !important;
+        }
+        
+        .leaflet-control-geosearch.leaflet-bar,
+        .leaflet-control-locate a {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: none;
+        }
+        
+        .leaflet-control-locate a {
+            background-color: #ffffff;
+            color: #007bff;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            font-size: 20px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        
+        .leaflet-control-locate a:hover {
+            background-color: #f0f0f0;
+            color: #0056b3;
+        }
+        
+        .leaflet-control-locate.active a {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .leaflet-control-geosearch .geosearch-bar,
+        .leaflet-control-geosearch .geosearch-results {
+            border-radius: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                width: 90%;
+                bottom: 10px;
+                transform: translateX(-50%);
+                gap: 8px;
+            }
+            .header-container input {
+                width: 100%;
+            }
+            .leaflet-control-geosearch.leaflet-bar {
+                width: 90vw !important;
+                max-width: 300px;
+                left: 50% !important;
+                top: 20px !important;
+                transform: translateX(-50%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header-container">
+        <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-location-dot"></i></span>
+            <input type="text" id="from-location" placeholder="Enter from location">
+        </div>
+        <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-flag"></i></span>
+            <input type="text" id="to-location" placeholder="Enter to location">
+        </div>
+        <button id="get-route-btn">Get Route</button>
+    </header>
+    <main id="map"></main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geosearch@latest/dist/bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.js" charset="utf-8"></script>
+    
+    <script>
+        // Initialize the map, centered on the College of Engineering Trivandrum (CET)
+        const map = L.map('map').setView([8.5477, 76.9067], 15);
+
+        // Add the OpenStreetMap tile layer to display the map visuals
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a marker for the College of Engineering Trivandrum
+        const cetMarker = L.marker([8.5477, 76.9067]).addTo(map);
+        cetMarker.bindPopup("<b>College of Engineering Trivandrum</b><br>Sreekaryam, Thiruvananthapuram").openPopup();
+
+        // --- Geosearch integration for finding locations by name ---
+        const provider = new GeoSearch.OpenStreetMapProvider();
+        const searchControl = new GeoSearch.GeoSearchControl({
+            provider: provider,
+            style: 'bar',
+            showMarker: true,
+            showPopup: true,
+            autoClose: true,
+            searchLabel: 'Search places...',
+            animateZoom: true,
+            resultFormat: function(data) {
+                return data.label;
+            }
+        });
+        map.addControl(searchControl);
+
+        // --- Locate control for detecting the user's current location ---
+        L.control.locate({
+            position: 'topleft',
+            strings: {
+                title: "Show me where I am!"
+            },
+            locateOptions: {
+                maxZoom: 16
+            }
+        }).addTo(map);
+
+        // --- Routing integration for "from" and "to" locations ---
+        const getRouteBtn = document.getElementById('get-route-btn');
+        const fromInput = document.getElementById('from-location');
+        const toInput = document.getElementById('to-location');
+        let routeLayer = null;
+
+        getRouteBtn.addEventListener('click', async () => {
+            const fromLocation = fromInput.value;
+            const toLocation = toInput.value;
+
+            if (!fromLocation || !toLocation) {
+                alert("Please enter both 'from' and 'to' locations.");
+                return;
+            }
+
+            getRouteBtn.disabled = true;
+            getRouteBtn.textContent = 'Calculating...';
+
+            try {
+                // Geocode the "from" and "to" locations
+                const fromResult = await provider.search({ query: fromLocation });
+                const toResult = await provider.search({ query: toLocation });
+
+                if (fromResult.length === 0 || toResult.length === 0) {
+                    alert("Could not find one or both locations. Please be more specific.");
+                    return;
+                }
+
+                // Use the OSRM routing service
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${fromResult[0].x},${fromResult[0].y};${toResult[0].x},${toResult[0].y}?overview=full&geometries=geojson`;
+
+                const response = await fetch(osrmUrl);
+                const data = await response.json();
+
+                if (data.code !== 'Ok') {
+                    alert("Routing failed. " + (data.message || 'Unknown error.'));
+                    return;
+                }
+
+                // Remove old route and markers
+                if (routeLayer) {
+                    map.removeLayer(routeLayer);
+                }
+                map.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker && layer !== cetMarker) {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                // Add the new route to the map
+                const routeGeoJSON = data.routes[0].geometry;
+                routeLayer = L.geoJSON(routeGeoJSON, {
+                    style: {
+                        color: '#007bff',
+                        weight: 5,
+                        opacity: 0.7
+                    }
+                }).addTo(map);
+
+                // Add markers for the start and end points of the route
+                const startMarker = L.marker([fromResult[0].y, fromResult[0].x]).addTo(map);
+                const endMarker = L.marker([toResult[0].y, toResult[0].x]).addTo(map);
+
+                const routeDistance = (data.routes[0].distance / 1000).toFixed(2); // in km
+                const routeDuration = (data.routes[0].duration / 60).toFixed(0); // in minutes
+                
+                startMarker.bindPopup(`<b>From:</b> ${fromResult[0].label}`).openPopup();
+                endMarker.bindPopup(`<b>To:</b> ${toResult[0].label}<br><b>Distance:</b> ${routeDistance} km<br><b>Est. Time:</b> ${routeDuration} min`).openPopup();
+
+                // Fit the map view to the bounds of the route
+                map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+            } catch (error) {
+                console.error("Error fetching route:", error);
+                alert("An error occurred while fetching the route.");
+            } finally {
+                getRouteBtn.disabled = false;
+                getRouteBtn.textContent = 'Get Route';
+            }
+        });
+    </script>
+</body>
+</html>
