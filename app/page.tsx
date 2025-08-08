@@ -36,16 +36,23 @@ export default function Home() {
   const [userId] = useState<string>('demo_user_123')
   type TabType = 'dashboard' | 'map' | 'emergency' | 'profile' | 'chat'
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
-  const [watchId, setWatchId] = useState<number | null>(null)
+  
 
   // Get initial location and set up watcher
   useEffect(() => {
     const getLocation = () => {
-      // DEV: Force CET Trivandrum location and skip geolocation for now
-      // CET Trivandrum approx coords: 8.5466, 76.9048
-      setCurrentLocation({ lat: 8.5466, lng: 76.9048 })
-      setLocationError(null)
-      return
+      // Optional: Force location via env (e.g., "8.5466,76.9048")
+      const forced = process.env.NEXT_PUBLIC_FORCE_LOCATION
+      if (forced) {
+        const [latStr, lngStr] = forced.split(',').map((s) => s.trim())
+        const lat = Number(latStr)
+        const lng = Number(lngStr)
+        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+          setCurrentLocation({ lat, lng })
+          setLocationError(null)
+          return
+        }
+      }
 
       if (navigator.geolocation) {
         // First get current position quickly
@@ -60,14 +67,15 @@ export default function Home() {
           },
           (error) => {
             console.error('Error getting location:', error)
-            setLocationError('Unable to retrieve your location')
-            // Default to CET Trivandrum for demo
+            // Default to CET Trivandrum for demo; clear error for non-blocking UX
             setCurrentLocation({ lat: 8.5241, lng: 76.9366 })
+            setLocationError(null)
           },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         )
 
         // Then set up continuous tracking
+        let localWatchId: number | null = null
         const id = navigator.geolocation.watchPosition(
           (position) => {
             setCurrentLocation({
@@ -79,24 +87,31 @@ export default function Home() {
           },
           (error) => {
             console.error('Error watching location:', error)
-            setLocationError('Location tracking failed')
+            // Keep last known location; avoid persistent error badge
+            setLocationError(null)
           },
           { enableHighAccuracy: true, maximumAge: 10000 }
         )
-        setWatchId(id)
+        localWatchId = id
+
+        // Cleanup for this watcher
+        return () => {
+          if (localWatchId && navigator.geolocation) {
+            navigator.geolocation.clearWatch(localWatchId)
+          }
+        }
       } else {
-        setLocationError('Geolocation is not supported by your browser')
+        // Fallback to a known coordinate and avoid blocking error
         setCurrentLocation({ lat: 37.7749, lng: -122.4194 })
+        setLocationError(null)
       }
     }
 
-    getLocation()
+    const cleanup = getLocation()
 
     // Clean up the watcher when component unmounts
     return () => {
-      if (watchId && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId)
-      }
+      if (typeof cleanup === 'function') cleanup()
     }
   }, [])
 
@@ -286,7 +301,7 @@ export default function Home() {
               <div className="lg:col-span-3">
                 <AgenticChat 
                   userId={userId}
-                  location={currentLocation}
+                  location={currentLocation ?? undefined}
                   riskLevel={riskLevel}
                   onEmergency={(alert) => {
                     console.log('Emergency triggered from chat:', alert)

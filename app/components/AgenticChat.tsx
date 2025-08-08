@@ -20,9 +20,11 @@ interface Message {
 interface AgenticChatProps {
   userId: string
   onEmergency?: (alert: any) => void
+  location?: { lat: number; lng: number; accuracy?: number }
+  riskLevel?: 'low' | 'medium' | 'high'
 }
 
-export default function AgenticChat({ userId, onEmergency }: AgenticChatProps) {
+export default function AgenticChat({ userId, onEmergency, location, riskLevel }: AgenticChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -116,7 +118,8 @@ export default function AgenticChat({ userId, onEmergency }: AgenticChatProps) {
           message: userMessage,
           context: {
             timestamp: new Date().toISOString(),
-            location: await getCurrentLocation()
+            location: await getContextLocation(),
+            riskLevel
           }
         }))
       } else {
@@ -128,7 +131,8 @@ export default function AgenticChat({ userId, onEmergency }: AgenticChatProps) {
             message: userMessage,
             context: {
               timestamp: new Date().toISOString(),
-              location: await getCurrentLocation()
+              location: await getContextLocation(),
+              riskLevel
             }
           })
         })
@@ -144,6 +148,13 @@ export default function AgenticChat({ userId, onEmergency }: AgenticChatProps) {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const getContextLocation = async (): Promise<any> => {
+    if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
+      return location
+    }
+    return await getCurrentLocation()
   }
 
   const handleAgentResponse = (response: any) => {
