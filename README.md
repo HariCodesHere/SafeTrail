@@ -212,10 +212,10 @@ graph LR
 
 ## Roadmap
 
-- [ ] Phase 1: Core monitoring (Q1 2024)
-- [ ] Phase 2: Multi-city crime data (Q2 2024)
-- [ ] Phase 3: Predictive risk modeling (Q3 2024)
-- [ ] Phase 4: Crowdsourced threat reporting (Q4 2024)
+- [ ] Phase 1: Core monitoring
+- [ ] Phase 2: Multi-city crime data 
+- [ ] Phase 3: Predictive risk modeling 
+- [ ] Phase 4: Crowdsourced threat reporting
 
 
 ## Contributors
