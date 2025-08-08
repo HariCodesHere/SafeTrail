@@ -136,6 +136,11 @@ git clone https://github.com/HariCodesHere/SafeTrail.git
 cd SafeTrail
 
 # Install dependencies
+python setup.py
+
+     OR
+
+
 pnpm install  # Frontend
 pip install -r requirements.txt  # Python backend
 ```
