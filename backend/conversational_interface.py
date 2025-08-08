@@ -181,11 +181,16 @@ class ConversationalInterface:
         
         # Critical urgency - immediate emergency response
         if urgency == 'critical':
+            # Short, precise user-facing message
+            response['response'] = (
+                "Emergency protocols activated. Your emergency contacts have been informed. "
+                "Advice: Move to a safe, well-lit area and avoid isolated paths. Keep your phone visible and the line open for responders."
+            )
             response['emergency_activated'] = True
             response['immediate_actions'] = [
-                'Emergency services have been notified',
-                'Your location has been shared with emergency contacts',
-                'Stay calm and follow emergency procedures'
+                'Emergency services notified',
+                'Location shared with contacts',
+                'Stay calm and follow instructions'
             ]
             
             # Trigger emergency protocol
@@ -271,9 +276,11 @@ class ConversationalInterface:
         try:
             if user_id in self.websocket_connections:
                 websocket = self.websocket_connections[user_id]
+                # Prefer sending the concise text if available
+                payload = response.get('response', response)
                 await websocket.send_text(json.dumps({
-                    'type': 'conversational_response',
-                    'data': response,
+                    'type': 'chat_response',
+                    'data': payload,
                     'timestamp': datetime.now().isoformat()
                 }))
         except Exception as e:

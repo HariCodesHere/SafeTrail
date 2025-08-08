@@ -1,342 +1,258 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Loader, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
-interface Message {
-  id: string
-  type: 'user' | 'agent'
+type Message = {
+  role: 'user' | 'assistant'
   content: string
+}
+
+interface Location {
+  lat: number
+  lng: number
+  accuracy?: number
+  timestamp?: number
+}
+
+interface EmergencyAlert {
+  type: 'medical' | 'security' | 'fire' | 'general'
+  location: Location
+  message: string
   timestamp: Date
-  metadata?: {
-    confidence?: number
-    safety_priority?: string
-    actions?: string[]
-    reasoning?: string
-    proactive_suggestions?: string[]
-  }
 }
 
-interface AgenticChatProps {
+type AgenticChatProps = {
   userId: string
-  onEmergency?: (alert: any) => void
+  location: Location | null
+  riskLevel?: 'low' | 'medium' | 'high'
+  onEmergency: (alert: EmergencyAlert) => void
 }
 
-export default function AgenticChat({ userId, onEmergency }: AgenticChatProps) {
+export default function AgenticChat({ userId, location, riskLevel, onEmergency }: AgenticChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [inputMessage, setInputMessage] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
-  const [websocket, setWebsocket] = useState<WebSocket | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [input, setInput] = useState('')
+  const wsRef = useRef<WebSocket | null>(null)
+  const [connection, setConnection] = useState<{
+    status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'mock'
+    message?: string
+  }>({ status: 'connecting' })
 
+  // Add initial context message
   useEffect(() => {
-    // Initialize WebSocket connection
-    const ws = new WebSocket(`ws://localhost:8000/ws/agentic/${userId}`)
-    
-    ws.onopen = () => {
-      setIsConnected(true)
-      console.log('Agentic WebSocket connected')
-      
-      // Start conversation session
-      startConversationSession()
+    if (location) {
+      setMessages([{
+        role: 'assistant',
+        content: `Hello! I'm your AI safety assistant. I can see you're at coordinates ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}. Current risk level is ${riskLevel || 'low'}. How can I help keep you safe today?`
+      }])
     }
+  }, [location, riskLevel])
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      
-      if (data.type === 'chat_response') {
-        handleAgentResponse(data.data)
-      } else if (data.type === 'conversational_response') {
-        handleAgentResponse(data.data)
-      }
-    }
-
-    ws.onclose = () => {
-      setIsConnected(false)
-      console.log('Agentic WebSocket disconnected')
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-      setIsConnected(false)
-    }
-
-    setWebsocket(ws)
-
-    return () => {
-      ws.close()
-    }
-  }, [userId])
-
+  // Connect to WebSocket with fallback to mock responses
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  const startConversationSession = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/agentic/start-session/${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          user_agent: navigator.userAgent
-        })
-      })
-      
-      const data = await response.json()
-      if (data.status === 'session_started' && data.response) {
-        addMessage('agent', data.response.response, data.response)
-      }
-    } catch (error) {
-      console.error('Error starting session:', error)
-      addMessage('agent', "Hello! I'm your SafeTrail AI assistant. How can I help keep you safe today?")
-    }
-  }
+      setConnection({ status: 'connecting' })
+      const ws = new WebSocket(`ws://localhost:8000/ws/agentic/${userId}`)
+      wsRef.current = ws
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return
-
-    const userMessage = inputMessage.trim()
-    setInputMessage('')
-    setIsLoading(true)
-
-    // Add user message to chat
-    addMessage('user', userMessage)
-
-    try {
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-        // Send via WebSocket for real-time response
-        websocket.send(JSON.stringify({
-          type: 'chat_message',
-          message: userMessage,
-          context: {
-            timestamp: new Date().toISOString(),
-            location: await getCurrentLocation()
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data)
+          // Ignore any websocket payloads that are not chat responses
+          if (msg?.type && msg.type !== 'chat_response') {
+            return
           }
-        }))
-      } else {
-        // Fallback to HTTP API
-        const response = await fetch(`http://localhost:8000/api/agentic/chat/${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: userMessage,
-            context: {
-              timestamp: new Date().toISOString(),
-              location: await getCurrentLocation()
-            }
-          })
-        })
+          let replyText: string | undefined
+          // Preferred protocol: { type: 'chat_response', data: <string|object> }
+          if (msg?.type === 'chat_response') {
+            if (typeof msg.data === 'string') replyText = msg.data
+            else if (msg.data?.reply) replyText = msg.data.reply
+            else replyText = JSON.stringify(msg.data)
+          }
+          // Backward-compat: { reply: '...' }
+          if (!replyText && msg?.reply) replyText = msg.reply
+          // Fallback: stringify
+          if (!replyText) replyText = typeof msg === 'string' ? msg : JSON.stringify(msg)
 
-        const data = await response.json()
-        if (data.status === 'success') {
-          handleAgentResponse(data.response)
+          setMessages((prev) => [...prev, { role: 'assistant', content: replyText! }])
+        } catch (e) {
+          console.error('Failed to parse WS message:', e)
         }
       }
-    } catch (error) {
-      console.error('Error sending message:', error)
-      addMessage('agent', "I'm having trouble processing your request. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  const handleAgentResponse = (response: any) => {
-    addMessage('agent', response.response, response)
-    
-    // Handle emergency situations
-    if (response.emergency_activated && onEmergency) {
-      onEmergency({
-        type: 'conversational_emergency',
-        message: response.response,
-        actions: response.immediate_actions
-      })
-    }
-    
-    setIsLoading(false)
-  }
-
-  const addMessage = (type: 'user' | 'agent', content: string, metadata?: any) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      type,
-      content,
-      timestamp: new Date(),
-      metadata
-    }
-    
-    setMessages(prev => [...prev, newMessage])
-  }
-
-  const getCurrentLocation = (): Promise<any> => {
-    return new Promise((resolve) => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracy: position.coords.accuracy
-            })
-          },
-          () => resolve(null)
-        )
-      } else {
-        resolve(null)
+      ws.onopen = () => {
+        console.log('WebSocket connected to backend')
+        setConnection({ status: 'connected' })
       }
-    })
-  }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
+      ws.onerror = (err) => {
+        console.error('WebSocket error - backend not running:', err)
+        console.log('Falling back to mock responses for testing')
+        setConnection({ status: 'mock', message: 'Using mock responses' })
+      }
+
+      ws.onclose = () => {
+        setConnection((prev) => prev.status === 'mock' ? prev : { status: 'disconnected' })
+      }
+
+      return () => {
+        try { ws.close() } catch {}
+      }
+    } catch (error) {
+      console.error('Failed to connect to backend:', error)
+      console.log('Using mock responses for testing')
+      setConnection({ status: 'mock', message: 'Using mock responses' })
     }
+  }, [])
+
+  // Send a message
+  const sendMessage = () => {
+    if (!input.trim()) return
+
+    const message: Message = { role: 'user', content: input }
+    setMessages((prev) => [...prev, message])
+
+    // Try WebSocket first, fallback to mock response
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'chat_message',
+          message: input,
+          context: { location, riskLevel, userId },
+        })
+      )
+    } else {
+      // Mock response for testing when backend is not available
+      setConnection({ status: 'mock', message: 'Using mock responses' })
+      setTimeout(() => {
+        const mockResponses = [
+          `Based on your location at ${location?.lat.toFixed(4)}, ${location?.lng.toFixed(4)}, I can help you with safety guidance.`,
+          `Current risk level is ${riskLevel}. I recommend staying alert and following safety protocols.`,
+          `I'm analyzing the area around you. Would you like me to suggest a safe route?`,
+          `For emergency situations, I can help coordinate with local authorities. Stay safe!`,
+          `I'm here to assist with route planning, safety tips, and emergency protocols.`
+        ]
+        const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)]
+        setMessages((prev) => [...prev, { role: 'assistant', content: randomResponse }])
+      }, 1000)
+    }
+
+    setInput('')
   }
 
-  const getSafetyPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case 'critical': return 'text-red-600'
-      case 'high': return 'text-orange-600'
-      case 'medium': return 'text-yellow-600'
-      case 'low': return 'text-green-600'
-      default: return 'text-gray-600'
+  // Handle emergency
+  const handleEmergency = async () => {
+    if (!location) {
+      alert('Location not available for emergency alert')
+      return
+    }
+
+    const emergencyAlert: EmergencyAlert = {
+      type: 'general',
+      location,
+      message: 'Emergency alert triggered from chat',
+      timestamp: new Date()
+    }
+
+    try {
+      const res = await fetch('/api/emergency', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          location,
+          timestamp: new Date().toISOString(),
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        onEmergency(data)
+      } else {
+        onEmergency(emergencyAlert)
+      }
+    } catch (error) {
+      console.error('Emergency API error:', error)
+      onEmergency(emergencyAlert)
     }
   }
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
-        <div className="flex items-center space-x-2">
-          <Bot className="w-6 h-6" />
-          <h3 className="font-semibold">SafeTrail AI Assistant</h3>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
-          <span className="text-sm">{isConnected ? 'Connected' : 'Disconnected'}</span>
+    <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white">AI Safety Assistant</h3>
+        <div className="flex items-center gap-2">
+          <div className={`px-2 py-1 rounded text-xs font-medium ${
+            riskLevel === 'high' ? 'bg-red-900 text-red-300 border border-red-700' :
+            riskLevel === 'medium' ? 'bg-yellow-900 text-yellow-300 border border-yellow-700' :
+            'bg-green-900 text-green-300 border border-green-700'
+          }`}>
+            Risk: {riskLevel?.toUpperCase() || 'LOW'}
+          </div>
+          <div
+            className={`px-2 py-1 rounded text-xs font-medium border ${
+              connection.status === 'connected' ? 'bg-emerald-900 text-emerald-300 border-emerald-700' :
+              connection.status === 'connecting' ? 'bg-blue-900 text-blue-300 border-blue-700' :
+              connection.status === 'mock' ? 'bg-purple-900 text-purple-300 border-purple-700' :
+              connection.status === 'error' ? 'bg-red-900 text-red-300 border-red-700' :
+              'bg-gray-700 text-gray-300 border-gray-600'
+            }`}
+            title={connection.message}
+          >
+            {connection.status === 'connected' && 'Connected'}
+            {connection.status === 'connecting' && 'Connecting...'}
+            {connection.status === 'mock' && 'Mock Mode'}
+            {connection.status === 'error' && 'Error'}
+            {connection.status === 'disconnected' && 'Disconnected'}
+          </div>
         </div>
       </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+      
+      <div className="h-64 overflow-y-auto bg-gray-700 border border-gray-600 p-3 rounded-lg mb-4">
+        {messages.length === 0 ? (
+          <div className="text-gray-400 text-center py-8">
+            <p>Start a conversation with your AI safety assistant</p>
+          </div>
+        ) : (
+          messages.map((msg, idx) => (
             <div
-              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                message.type === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-800'
+              key={idx}
+              className={`p-3 my-2 rounded-lg max-w-[80%] ${
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white ml-auto text-right'
+                  : 'bg-gray-600 text-gray-100 mr-auto text-left'
               }`}
             >
-              <div className="flex items-start space-x-2">
-                {message.type === 'agent' && <Bot className="w-4 h-4 mt-1 flex-shrink-0" />}
-                {message.type === 'user' && <User className="w-4 h-4 mt-1 flex-shrink-0" />}
-                <div className="flex-1">
-                  <p className="text-sm">{message.content}</p>
-                  
-                  {/* Agent metadata */}
-                  {message.type === 'agent' && message.metadata && (
-                    <div className="mt-2 space-y-1">
-                      {/* Confidence and Safety Priority */}
-                      {(message.metadata.confidence || message.metadata.safety_priority) && (
-                        <div className="flex items-center space-x-2 text-xs">
-                          {message.metadata.confidence && (
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                              Confidence: {Math.round(message.metadata.confidence * 100)}%
-                            </span>
-                          )}
-                          {message.metadata.safety_priority && (
-                            <span className={`px-2 py-1 rounded ${getSafetyPriorityColor(message.metadata.safety_priority)}`}>
-                              {message.metadata.safety_priority.toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Actions taken */}
-                      {message.metadata.actions && message.metadata.actions.length > 0 && (
-                        <div className="text-xs">
-                          <p className="font-medium text-gray-600">Actions:</p>
-                          <ul className="list-disc list-inside text-gray-500">
-                            {message.metadata.actions.map((action: string, idx: number) => (
-                              <li key={idx}>{action}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {/* Proactive suggestions */}
-                      {message.metadata.proactive_suggestions && message.metadata.proactive_suggestions.length > 0 && (
-                        <div className="text-xs">
-                          <p className="font-medium text-blue-600">Suggestions:</p>
-                          <ul className="list-disc list-inside text-blue-500">
-                            {message.metadata.proactive_suggestions.map((suggestion: string, idx: number) => (
-                              <li key={idx}>{suggestion}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="text-xs opacity-70 mt-1">
-                {message.timestamp.toLocaleTimeString()}
-              </div>
+              {msg.content}
             </div>
-          </div>
-        ))}
-        
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Bot className="w-4 h-4" />
-                <Loader className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Thinking...</span>
-              </div>
-            </div>
-          </div>
+          ))
         )}
-        
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t">
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask me about safety, routes, or anything else..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={isLoading || !inputMessage.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-        
-        <div className="mt-2 text-xs text-gray-500">
-          Ask me about routes, safety checks, weather, or emergency assistance
-        </div>
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+          className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Ask about safety, routes, or emergency help..."
+        />
+        <button 
+          onClick={sendMessage} 
+          className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+          disabled={!input.trim()}
+        >
+          <Send className="w-5 h-5" />
+        </button>
       </div>
+
+      <button
+        onClick={handleEmergency}
+        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+      >
+        <span>🚨</span>
+        <span>Emergency Alert</span>
+      </button>
     </div>
   )
 }
