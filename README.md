@@ -3,17 +3,23 @@
 **An Agentic AI-Powered Safety Navigation System**  
 _Real-time route protection with automatic risk intervention and emergency protocols_
 
+## Live Links
+
+- Frontend: https://safetrail.vercel.app
+- Backend API: https://safetrail-dfkn.onrender.com
+- Source: https://github.com/HariCodesHere/SafeTrail
+
 ## Tech Stack
 
-| Component     | Technology                           |
-| ------------- | ------------------------------------ |
-| **Frontend**  | Next.js 14, React Map GL             |
-| **Backend**   | Python FastAPI, Node.js              |
-| **AI Engine** | Google Gemini Pro                    |
-| **Real-Time** | WebSockets, Firebase Cloud Messaging |
-| **Maps**      | Google Maps API, Mapbox              |
-| **Database**  | Supabase (PostgreSQL)                |
-| **Emergency** | Twilio API, Emergency Services APIs  |
+| Component     | Technology                               |
+| ------------- | ---------------------------------------- |
+| **Frontend**  | Next.js 14, React Leaflet, OpenStreetMap |
+| **Backend**   | Python FastAPI (WebSocket)               |
+| **AI Engine** | Google Gemini Pro                        |
+| **Real-Time** | WebSockets, Firebase Cloud Messaging     |
+| **Maps**      | OpenStreetMap, Leaflet                   |
+| **Database**  | Supabase (PostgreSQL)                    |
+| **Emergency** | Twilio API, Emergency Services APIs      |
 
 ## Agentic Features
 
@@ -73,6 +79,20 @@ class SafetyAgent:
                     self.activate_emergency_protocol()
 ```
 
+### WebSocket Protocol (Chat)
+
+- Client → Server (frontend `AgenticChat.tsx`):
+
+```json
+{ "type": "chat_message", "message": "<user text>", "context": { "location": {"lat": ..., "lng": ...}, "riskLevel": "low|medium|high", "userId": "..." } }
+```
+
+- Server → Client (backend `main.py` / `conversational_interface.py`):
+
+```json
+{ "type": "chat_response", "data": "<assistant reply text>" }
+```
+
 ### 2. Risk Detection System
 
 ```python
@@ -122,7 +142,7 @@ pip install -r requirements.txt  # Python backend
 
 ### 2. Configuration
 
-Create `.env` file:
+Create `.env.local` (frontend) and `.env` (backend) files as needed:
 
 ```
 # Google AI API Key for Gemini Pro
@@ -134,32 +154,33 @@ TWILIO_AUTH_TOKEN=your_twilio_token_here
 TWILIO_PHONE_NUMBER=your_twilio_phone_number
 
 # Firebase Configuration
-FIREBASE_PROJECT_ID=your_firebase_project_id
-FIREBASE_PRIVATE_KEY_ID=your_firebase_private_key_id
-FIREBASE_PRIVATE_KEY="your_firebase_private_key"
-FIREBASE_CLIENT_EMAIL=your_firebase_client_email
-FIREBASE_CLIENT_ID=your_firebase_client_id
-FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
-FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_firebase_messaging_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 
 # Supabase Configuration
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# Google Maps API
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-
-# Mapbox API
-MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
-
 # Application Configuration
 NODE_ENV=development
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000  # Frontend → Backend base URL (use your deployed URL in prod)
 BACKEND_PORT=8000
 FRONTEND_PORT=3000
 
+# Routing (Frontend)
+NEXT_PUBLIC_ORS_API_KEY=your_openrouteservice_key
+# Optional: Force location during demos/dev (lat,lng)
+NEXT_PUBLIC_FORCE_LOCATION=8.5466,76.9048
 ```
+
+## Authentication
+
+- Users must sign in with Google or email/password (via Firebase) to access the app.
 
 ## Deployment Architecture
 
@@ -191,6 +212,13 @@ graph LR
 - [ ] Phase 3: Predictive risk modeling (Q3 2024)
 - [ ] Phase 4: Crowdsourced threat reporting (Q4 2024)
 
-```
 
-```
+## Contributors
+
+- Harikrishnan Santhosh — https://github.com/HariCodesHere
+- Gauri J — https://github.com/GauriCode
+- Tejas Premod — https://github.com/TejasPremod
+- Keerthana V T — https://github.com/KeerthanaVT
+- Bharath M Guptha — https://github.com/0-BMG-0
+
+
