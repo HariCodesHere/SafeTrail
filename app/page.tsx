@@ -1,44 +1,127 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Shield, MapPin, Phone, AlertTriangle, Navigation, MessageCircle, Bot } from 'lucide-react'
-import MapComponent from './components/MapComponent'
+import { Shield, MapPin, Phone, AlertTriangle, Navigation, Bot } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import SafetyDashboard from './components/SafetyDashboard'
 import EmergencyPanel from './components/EmergencyPanel'
 import UserProfile from './components/UserProfile'
 import AgenticChat from './components/AgenticChat'
 
+// Dynamically import MapComponent to avoid SSR issues with Leaflet
+const MapComponent = dynamic(() => import('./components/MapComponent'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-96 bg-gray-700 rounded-lg flex items-center justify-center border border-gray-600">
+      <div className="text-center">
+        <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-300">Loading map...</p>
+      </div>
+    </div>
+  )
+})
+
+interface Location {
+  lat: number
+  lng: number
+  accuracy?: number
+  timestamp?: number
+}
+
 export default function Home() {
   const [isJourneyActive, setIsJourneyActive] = useState(false)
-  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low')
-  const [userId, setUserId] = useState<string>('demo_user_123')
-  const [showAgenticChat, setShowAgenticChat] = useState(false)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'map' | 'emergency' | 'profile' | 'chat'>('dashboard')
+  const [userId] = useState<string>('demo_user_123')
+  type TabType = 'dashboard' | 'map' | 'emergency' | 'profile' | 'chat'
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard')
+  const [watchId, setWatchId] = useState<number | null>(null)
 
+  // Get initial location and set up watcher
   useEffect(() => {
-    // Get user's current location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          })
-        },
-        (error) => {
-          console.error('Error getting location:', error)
-          // Default to San Francisco for demo
-          setCurrentLocation({ lat: 37.7749, lng: -122.4194 })
-        }
-      )
+    const getLocation = () => {
+      // DEV: Force CET Trivandrum location and skip geolocation for now
+      // CET Trivandrum approx coords: 8.5466, 76.9048
+      setCurrentLocation({ lat: 8.5466, lng: 76.9048 })
+      setLocationError(null)
+      return
+
+      if (navigator.geolocation) {
+        // First get current position quickly
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setCurrentLocation({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: position.timestamp
+            })
+          },
+          (error) => {
+            console.error('Error getting location:', error)
+            setLocationError('Unable to retrieve your location')
+            // Default to CET Trivandrum for demo
+            setCurrentLocation({ lat: 8.5241, lng: 76.9366 })
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        )
+
+        // Then set up continuous tracking
+        const id = navigator.geolocation.watchPosition(
+          (position) => {
+            setCurrentLocation({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: position.timestamp
+            })
+          },
+          (error) => {
+            console.error('Error watching location:', error)
+            setLocationError('Location tracking failed')
+          },
+          { enableHighAccuracy: true, maximumAge: 10000 }
+        )
+        setWatchId(id)
+      } else {
+        setLocationError('Geolocation is not supported by your browser')
+        setCurrentLocation({ lat: 37.7749, lng: -122.4194 })
+      }
+    }
+
+    getLocation()
+
+    // Clean up the watcher when component unmounts
+    return () => {
+      if (watchId && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId)
+      }
     }
   }, [])
 
+  const handleStartJourney = () => {
+    setIsJourneyActive(true)
+    // Additional journey start logic can go here
+  }
+
+  const handleStopJourney = () => {
+    setIsJourneyActive(false)
+    // Additional journey stop logic can go here
+  }
+
+  const handleRiskUpdate = (risk: 'low' | 'medium' | 'high') => {
+    setRiskLevel(risk)
+    if (risk === 'high') {
+      console.warn('High risk detected!')
+      setActiveTab('emergency')
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gray-900 pb-20">
       {/* Header */}
-      <header className="bg-gray-800 shadow-lg border-b border-gray-700">
+      <header className="bg-gray-800 shadow-lg border-b border-gray-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
@@ -46,6 +129,11 @@ export default function Home() {
               <h1 className="text-2xl font-bold text-white">SafeTrail</h1>
             </div>
             <div className="flex items-center space-x-4">
+              {currentLocation && (
+                <div className="text-xs text-gray-400">
+                  {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
+                </div>
+              )}
               <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                 riskLevel === 'low' ? 'bg-green-900 text-green-300 border border-green-700' :
                 riskLevel === 'medium' ? 'bg-yellow-900 text-yellow-300 border border-yellow-700' :
@@ -79,7 +167,7 @@ export default function Home() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id as TabType)}
                   className={`${
                     activeTab === tab.id
                       ? 'bg-blue-600 text-white shadow-lg'
@@ -103,7 +191,7 @@ export default function Home() {
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-semibold text-white">Safety Overview</h2>
                     <button 
-                      onClick={() => setIsJourneyActive(!isJourneyActive)}
+                      onClick={isJourneyActive ? handleStopJourney : handleStartJourney}
                       className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
                         isJourneyActive 
                           ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg' 
@@ -117,11 +205,12 @@ export default function Home() {
                     isActive={isJourneyActive}
                     riskLevel={riskLevel}
                     currentLocation={currentLocation}
+                    locationError={locationError}
                   />
                 </div>
               </div>
               <div className="space-y-6">
-                <EmergencyPanel userId={userId} />
+                <EmergencyPanel userId={userId} currentLocation={currentLocation} />
                 <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-white">Quick Actions</h3>
                   <div className="space-y-3">
@@ -158,7 +247,7 @@ export default function Home() {
                     <span>Ask AI</span>
                   </button>
                   <button 
-                    onClick={() => setIsJourneyActive(!isJourneyActive)}
+                    onClick={isJourneyActive ? handleStopJourney : handleStartJourney}
                     className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
                       isJourneyActive 
                         ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg' 
@@ -176,14 +265,16 @@ export default function Home() {
                     currentLocation={currentLocation}
                     isJourneyActive={isJourneyActive}
                     onLocationUpdate={setCurrentLocation}
-                    onRiskUpdate={setRiskLevel}
+                    onRiskUpdate={handleRiskUpdate}
                   />
                 </div>
               ) : (
                 <div className="h-96 bg-gray-700 rounded-lg flex items-center justify-center border border-gray-600">
                   <div className="text-center">
                     <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-300">Loading map...</p>
+                    <p className="text-gray-300">
+                      {locationError || 'Loading location data...'}
+                    </p>
                   </div>
                 </div>
               )}
@@ -195,6 +286,8 @@ export default function Home() {
               <div className="lg:col-span-3">
                 <AgenticChat 
                   userId={userId}
+                  location={currentLocation}
+                  riskLevel={riskLevel}
                   onEmergency={(alert) => {
                     console.log('Emergency triggered from chat:', alert)
                     setActiveTab('emergency')
@@ -203,34 +296,42 @@ export default function Home() {
               </div>
               <div className="space-y-4">
                 <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6">
+                  <h3 className="text-lg font-semibold mb-4 text-white">Location Context</h3>
+                  {currentLocation ? (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-gray-300">
+                        <span className="font-medium">Coordinates:</span> {currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}
+                      </p>
+                      {currentLocation.accuracy && (
+                        <p className="text-gray-300">
+                          <span className="font-medium">Accuracy:</span> ~{Math.round(currentLocation.accuracy)} meters
+                        </p>
+                      )}
+                      {currentLocation.timestamp && (
+                        <p className="text-gray-300">
+                          <span className="font-medium">Updated:</span> {new Date(currentLocation.timestamp).toLocaleTimeString()}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm">Location data not available</p>
+                  )}
+                </div>
+                <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-white">AI Features</h3>
                   <div className="space-y-3 text-sm">
                     <div className="flex items-center space-x-3">
                       <div className="w-3 h-3 bg-green-400 rounded-full shadow-lg"></div>
-                      <span className="text-gray-300">Natural language queries</span>
+                      <span className="text-gray-300">Real-time location analysis</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="w-3 h-3 bg-blue-400 rounded-full shadow-lg"></div>
-                      <span className="text-gray-300">Multi-step planning</span>
+                      <span className="text-gray-300">Route planning based on current position</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="w-3 h-3 bg-purple-400 rounded-full shadow-lg"></div>
-                      <span className="text-gray-300">Learning from patterns</span>
+                      <span className="text-gray-300">Location-aware safety tips</span>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="w-3 h-3 bg-orange-400 rounded-full shadow-lg"></div>
-                      <span className="text-gray-300">Autonomous monitoring</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-white">Try Asking</h3>
-                  <div className="space-y-2 text-sm text-gray-400">
-                    <p className="hover:text-blue-400 transition-colors cursor-pointer">• "Plan a safe route to downtown"</p>
-                    <p className="hover:text-blue-400 transition-colors cursor-pointer">• "What's the current risk level?"</p>
-                    <p className="hover:text-blue-400 transition-colors cursor-pointer">• "Check weather conditions"</p>
-                    <p className="hover:text-red-400 transition-colors cursor-pointer">• "I feel unsafe, help me"</p>
-                    <p className="hover:text-purple-400 transition-colors cursor-pointer">• "Remember I prefer well-lit routes"</p>
                   </div>
                 </div>
               </div>
@@ -239,7 +340,11 @@ export default function Home() {
 
           {activeTab === 'emergency' && (
             <div className="max-w-2xl mx-auto">
-              <EmergencyPanel userId={userId} />
+              <EmergencyPanel 
+                userId={userId} 
+                currentLocation={currentLocation}
+                locationError={locationError}
+              />
             </div>
           )}
 
@@ -252,9 +357,12 @@ export default function Home() {
       </div>
 
       {/* Quick Actions Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 shadow-2xl p-4 backdrop-blur-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-800/90 border-t border-gray-700 shadow-2xl p-4 backdrop-blur-lg z-40">
         <div className="max-w-7xl mx-auto flex justify-center space-x-4">
-          <button className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg">
+          <button 
+            onClick={() => setActiveTab('emergency')}
+            className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg"
+          >
             <AlertTriangle className="h-5 w-5" />
             <span>Emergency</span>
           </button>
@@ -262,7 +370,10 @@ export default function Home() {
             <Phone className="h-5 w-5" />
             <span>Call Contact</span>
           </button>
-          <button className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg">
+          <button 
+            onClick={() => setActiveTab('map')}
+            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg"
+          >
             <Navigation className="h-5 w-5" />
             <span>Safe Route</span>
           </button>

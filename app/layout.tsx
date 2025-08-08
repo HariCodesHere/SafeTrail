@@ -1,24 +1,19 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
-
-const inter = Inter({ subsets: ['latin'] })
+import { ReactNode } from 'react'
+import AuthWrapper from './components/AuthWrapper'
 
 export const metadata = {
   title: 'SafeTrail - AI-Powered Safety Navigation',
-  description: 'Real-time route protection with automatic risk intervention and emergency protocols',
+  description: 'Your intelligent companion for safe travel with AI assistance and real-time monitoring',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <div className="min-h-screen bg-gray-50">
+      <body className="bg-gray-900 text-white">
+        <AuthWrapper>
           {children}
-        </div>
+        </AuthWrapper>
       </body>
     </html>
   )
